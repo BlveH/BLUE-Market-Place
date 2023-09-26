@@ -6,22 +6,20 @@ import * as chai from "chai";
 
 import ChaiAsPromised from "chai-as-promised";
 chai.use(ChaiAsPromised);
-import { keccak256 } from "@ethersproject/solidity";
-import {HardhatEthersSigner} from "@nomicfoundation/hardhat-ethers/signers";
-import {BaseContract, ContractTransactionResponse} from "ethers";
+import { keccak256 } from "ethers/lib/utils";
 
 const parseEther = (amount: Number) => {
-  return ethers.parseUnits(amount.toString(), 18);
+  return ethers.utils.parseUnits(amount.toString(), 18);
 };
 
 describe("Vault", () => {
-  let owner: HardhatEthersSigner,
-      alice: HardhatEthersSigner,
-      bob: HardhatEthersSigner,
-      carol: HardhatEthersSigner;
+  let owner: SignerWithAddress,
+      alice: SignerWithAddress,
+      bob: SignerWithAddress,
+      carol: SignerWithAddress;
 
-  let vault: BaseContract & {     deploymentTransaction(): ContractTransactionResponse; } & Omit<Contract, keyof BaseContract>;
-  let token: BaseContract & {     deploymentTransaction(): ContractTransactionResponse; } & Omit<Contract, keyof BaseContract>;
+  let vault: Contract;
+  let token: Contract;
 
   beforeEach(async () => {
     await ethers.provider.send("hardhat_reset", []);
@@ -38,7 +36,7 @@ describe("Vault", () => {
     await token.transfer(alice.address, parseEther(10 ** 6));
     await token.connect(alice).approve(vault.address, token.balanceOf(alice.address));
     await vault.connect(alice).deposit(parseEther(500*10**3));
-    expect(await token.balanceOf(vault.address).equal(parseEther(500*10**3)));
+    expect(await token.balanceOf(vault.address)).equal(parseEther(500*10**3));
   });
 
   it('Should withdraw', async () => {
@@ -49,7 +47,7 @@ describe("Vault", () => {
   it('Should not deposit', async () => {
     await token.transfer(alice.address, parseEther(10**6));
     await token.connect(alice).approve(vault.address, token.balanceOf(alice.address));
-    await expect (vault.connect(alice).deposit(parseEther(2*10**6))).revertedWidth("Insufficient account balance");
+    await expect (vault.connect(alice).deposit(parseEther(2*10**6))).rejectedWith("Insufficient account balance");
   });
 
   it('Should not withdraw, Withdraw is not available ',async () => {
@@ -58,16 +56,17 @@ describe("Vault", () => {
     await vault.grantRole(WITHDRAWER_ROLE, bob.address);
 
     //setter vault functions
-    await  vault.setWithdrawEnable(false);
-    await vault.setMaxWithdrawAmount(parseEther(10**6));
+    await  vault.setWithdrawEnable(true);
+    await vault.setMaxWithdrawAmount(parseEther(10**3));
 
     //alice deposit into the vault
     await token.transfer(alice.address, parseEther(10**6));
     await token.connect(alice).approve(vault.address, token.balanceOf(alice.address));
     await  vault.connect(alice).deposit(parseEther(500*10**3));
 
+
     //bob withdraw into alice address
-    await  expect(vault.connect(bob).withdraw(parseEther(10**3), alice.address)).revertedWidth("Caller is  not a withdrawer");
+    await  expect(vault.connect(carol).withdraw(parseEther(10**3), alice.address)).revertedWith("Caller is  not a withdrawer");
   });
 
   it('Should not withdraw, ERC20: transfer amount exceeds balance', async () => {
@@ -76,8 +75,8 @@ describe("Vault", () => {
     await vault.grantRole(WITHDRAWER_ROLE, bob.address);
 
     //setter vault functions
-    await  vault.setWithdrawEnable(false);
-    await vault.setMaxWithdrawAmount(parseEther(10**6));
+    await  vault.setWithdrawEnable(true);
+    await vault.setMaxWithdrawAmount(parseEther(5*10**3));
 
     //alice deposit into the vault
     await token.transfer(alice.address, parseEther(10**6));
@@ -85,7 +84,7 @@ describe("Vault", () => {
     await  vault.connect(alice).deposit(parseEther(2*10**3));
 
     //bob withdraw into alice address
-    await  expect(vault.connect(bob).withdraw(parseEther(3*10**3), alice.address)).revertedWidth("ERC20: transfer amount exceeds balance");
+    await  expect(vault.connect(bob).withdraw(parseEther(3*10**3), alice.address)).revertedWith("ERC20: transfer amount exceeds balance");
   });
 });
 
